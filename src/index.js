@@ -9,7 +9,7 @@ require('./../config/redis') //just to test if redis is connected
 
 const express = require('express')
 const { createProxyMiddleware } = require('http-proxy-middleware')
-const logger = require('./../middleware/logger')
+const { logger, dbLogger} = require('./../middleware/logger')
 const auth = require('./../middleware/auth')
 const authRoutes = require('./../routes/auth')
 const rateLimiter = require('../middleware/rateLimiter')
@@ -40,8 +40,8 @@ const serviceBProxy = createProxyMiddleware({
 })
 
 // Order is now: auth → rateLimiter → circuitBreaker → proxy
-app.use('/service-a', auth, rateLimiter, circuitBreaker('service-a'), serviceAProxy)
-app.use('/service-b', auth, rateLimiter, circuitBreaker('service-b'), serviceBProxy)
+app.use('/service-a', auth, dbLogger, rateLimiter, circuitBreaker('service-a'), serviceAProxy)
+app.use('/service-b', auth, dbLogger, rateLimiter, circuitBreaker('service-b'), serviceBProxy)
 
 app.use((err, req, res, next) => {
     console.log(err.message)

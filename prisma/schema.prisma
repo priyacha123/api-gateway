@@ -22,4 +22,16 @@ model User {
   passwordHash   String    
   plan           Plan      @default(FREE)
   createdAt      DateTime  @default(now())
+  requestLogs    RequestLog[]
+}
+
+model RequestLog {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  route        String
+  method       String
+  statusCode   Int
+  responseTime Int
+  createdAt    DateTime @default(now())
 }
