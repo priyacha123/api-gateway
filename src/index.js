@@ -1,18 +1,25 @@
 require('dotenv').config()
 require('./../config/redis') //just to test if redis is connected
 
+// testing redis connection
+// const redis = require('./../config/redis') //just to test if redis is connected
+
+// redis.set('test', 'hello')
+// redis.get('test').then(val => console.log('Redis Test:', val))
+
 const express = require('express')
 const { createProxyMiddleware } = require('http-proxy-middleware')
 const logger = require('./../middleware/logger')
 const auth = require('./../middleware/auth')
 const authRoutes = require('./../routes/auth')
+const rateLimiter = require('../middleware/rateLimiter')
+const circuitBreaker = require('../middleware/circuitBreaker')
 
 const app = express()
 app.use(express.json())
 app.use(logger) // Use the logger middleware for all routes
-// app.use(auth) // Use the auth middleware for all routes
 
-app.get('/health', (req, res) => {
+app.get('/health', (req, res) => { 
     res.json({ status: 'API Gateway is running' })
 })
 
@@ -32,8 +39,9 @@ const serviceBProxy = createProxyMiddleware({
     pathRewrite: { '^/service-b': ''}
 })
 
-app.use('/service-a', auth, serviceAProxy)
-app.use('/service-b', auth, serviceBProxy)
+// Order is now: auth → rateLimiter → circuitBreaker → proxy
+app.use('/service-a', auth, rateLimiter, circuitBreaker('service-a'), serviceAProxy)
+app.use('/service-b', auth, rateLimiter, circuitBreaker('service-b'), serviceBProxy)
 
 app.use((err, req, res, next) => {
     console.log(err.message)
@@ -41,7 +49,6 @@ app.use((err, req, res, next) => {
 })
 
 // Add a temporary route to confirm error handling works
-
 // app.get('/error-test', (req, res, next) => {
 //     next(new Error('error erooro eorrr'))
 // })
