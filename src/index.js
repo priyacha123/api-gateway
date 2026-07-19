@@ -9,7 +9,7 @@ require('./../config/redis') //just to test if redis is connected
 
 const express = require('express')
 const { createProxyMiddleware } = require('http-proxy-middleware')
-const { logger, dbLogger} = require('./../middleware/logger')
+const { httpLogger, traceMiddleware ,dbLogger} = require('./../middleware/logger')
 const auth = require('./../middleware/auth')
 const authRoutes = require('./../routes/auth')
 const rateLimiter = require('../middleware/rateLimiter')
@@ -17,10 +17,11 @@ const circuitBreaker = require('../middleware/circuitBreaker')
 
 const app = express()
 app.use(express.json())
-app.use(logger) // Use the logger middleware for all routes
+app.use(traceMiddleware) // Use the trace middleware for all routes
+app.use(httpLogger) // Use the logger middleware for all routes
 
 app.get('/health', (req, res) => { 
-    res.json({ status: 'API Gateway is running' })
+    res.json({ status: 'API Gateway is running', traceId: req.traceId })
 })
 
 app.use('/auth', authRoutes) // Use the auth routes for /auth endpoints
@@ -30,13 +31,23 @@ app.use('/auth', authRoutes) // Use the auth routes for /auth endpoints
 const serviceAProxy = createProxyMiddleware({
     target: 'http://localhost:4001',
     changeOrigin: true,
-    pathRewrite: { '^/service-a': ''}
+    pathRewrite: { '^/service-a': ''},
+    on: {
+    proxyReq: (proxyReq, req) => {
+      proxyReq.setHeader('X-Trace-Id', req.traceId)
+    }
+  }
 })
 
 const serviceBProxy = createProxyMiddleware({
     target: 'http://localhost:4002',
     changeOrigin: true,
-    pathRewrite: { '^/service-b': ''}
+    pathRewrite: { '^/service-b': ''},
+    on: {
+    proxyReq: (proxyReq, req) => {
+      proxyReq.setHeader('X-Trace-Id', req.traceId)
+    }
+  }
 })
 
 // Order is now: auth → rateLimiter → circuitBreaker → proxy
@@ -44,8 +55,8 @@ app.use('/service-a', auth, dbLogger, rateLimiter, circuitBreaker('service-a'), 
 app.use('/service-b', auth, dbLogger, rateLimiter, circuitBreaker('service-b'), serviceBProxy)
 
 app.use((err, req, res, next) => {
-    console.log(err.message)
-    res.status(500).json({ error: err.message })
+    console.log(`[${req.traceId}] ${err.message}`)
+    res.status(500).json({ error: err.message, traceId: req.traceId })
 })
 
 // Add a temporary route to confirm error handling works

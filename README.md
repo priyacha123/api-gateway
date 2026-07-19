@@ -20,3 +20,8 @@ app.listen(4001, () => console.log('Service A on 4001'))
 \```
 
 **Service B (port 4002)** — same setup, change port to 4002 and service name to 'B'.
+
+
+![alt text](free.png)
+
+![alt text](pro.png)
