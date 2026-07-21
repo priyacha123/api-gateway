@@ -7,11 +7,12 @@ const PLANS = {
 
 const rateLimiter = async (req, res, next) => {
     try {
-        const userId = req.user.userId
+        // const userId = req.user.userId
+        const apiKeyId = req.headers['x-api-key']
         const plan = req.user.plan
         const { limit, window } = PLANS[plan] || PLANS.FREE
 
-        const key = `rate:${userId}`
+        const key = `rate:${apiKeyId}`
         const now = Date.now()
         const windowStart = now - window * 1000
 
