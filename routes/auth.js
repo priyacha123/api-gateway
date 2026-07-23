@@ -32,7 +32,9 @@ router.post('/register', async (req, res, next) => {
         const user = await prisma.user.create({
             data: {
                 email,
-                passwordHash: hashedPassword
+                passwordHash: hashedPassword,
+                plan:'FREE',
+                subscriptionStatus: 'INACTIVE'
             }
         })
 
@@ -71,7 +73,10 @@ router.post('/login', async (req, res, next) => {
 
         // Generate a JWT token
         const token = jwt.sign({ 
-            userId: user.id, plan: user.plan }, 
+            userId: user.id, 
+            plan: user.plan,
+            subscriptionStatus: user.subscriptionStatus
+        }, 
             process.env.JWT_SECRET, 
             { expiresIn: '1h' }
         )

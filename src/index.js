@@ -17,6 +17,7 @@ const rateLimiter = require('../middleware/rateLimiter')
 const circuitBreaker = require('../middleware/circuitBreaker')
 const projectRoutes = require('./../routes/projects')
 const keyRoutes = require('./../routes/keys')
+const billingRoutes = require('./../routes/billing')
 
 const app = express()
 
@@ -31,6 +32,7 @@ app.get('/health', (req, res) => {
 app.use('/auth', authRoutes) // Use the auth routes for /auth endpoints
 app.use('/projects', auth, projectRoutes) 
 app.use('/projects/:projectId/keys', auth, keyRoutes) // Use the key routes for /projects/:projectId/keys endpoints
+app.use('/billing', auth, billingRoutes) // Use the billing routes for /billing endpoints
 
 // Proxy middleware for routing requests to different services
 // What pathRewrite does: when a client hits /service-a/data, the gateway strips /service-a and forwards just /data to port 4001. The downstream service only ever sees /data — it doesn't know it's behind a gateway.
