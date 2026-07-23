@@ -11,20 +11,26 @@ const express = require('express')
 const { createProxyMiddleware } = require('http-proxy-middleware')
 const { httpLogger, traceMiddleware ,dbLogger} = require('./../middleware/logger')
 const auth = require('./../middleware/auth')
+const apiKeyAuth = require('./../middleware/apiKeyAuth')
 const authRoutes = require('./../routes/auth')
 const rateLimiter = require('../middleware/rateLimiter')
 const circuitBreaker = require('../middleware/circuitBreaker')
+const projectRoutes = require('./../routes/projects')
+const keyRoutes = require('./../routes/keys')
 
 const app = express()
+
 app.use(express.json())
 app.use(traceMiddleware) // Use the trace middleware for all routes
 app.use(httpLogger) // Use the logger middleware for all routes
 
 app.get('/health', (req, res) => { 
-    res.json({ status: 'API Gateway is running', traceId: req.traceId })
+    res.json({ status: 'API Gateway is running', product: 'GateKey' ,traceId: req.traceId })
 })
 
 app.use('/auth', authRoutes) // Use the auth routes for /auth endpoints
+app.use('/projects', auth, projectRoutes) 
+app.use('/projects/:projectId/keys', auth, keyRoutes) // Use the key routes for /projects/:projectId/keys endpoints
 
 // Proxy middleware for routing requests to different services
 // What pathRewrite does: when a client hits /service-a/data, the gateway strips /service-a and forwards just /data to port 4001. The downstream service only ever sees /data — it doesn't know it's behind a gateway.
@@ -51,8 +57,8 @@ const serviceBProxy = createProxyMiddleware({
 })
 
 // Order is now: auth → rateLimiter → circuitBreaker → proxy
-app.use('/service-a', auth, dbLogger, rateLimiter, circuitBreaker('service-a'), serviceAProxy)
-app.use('/service-b', auth, dbLogger, rateLimiter, circuitBreaker('service-b'), serviceBProxy)
+app.use('/service-a', apiKeyAuth, dbLogger, rateLimiter, circuitBreaker('service-a'), serviceAProxy)
+app.use('/service-b', apiKeyAuth, dbLogger, rateLimiter, circuitBreaker('service-b'), serviceBProxy) 
 
 app.use((err, req, res, next) => {
     console.log(`[${req.traceId}] ${err.message}`)
@@ -64,7 +70,7 @@ app.use((err, req, res, next) => {
 //     next(new Error('error erooro eorrr'))
 // })
 
-const PORT = process.env.PORT || 3000
+const PORT = process.env.PORT || 3001
 
 app.listen(PORT, () => {
     console.log(`API Gateway is running on port ${PORT}`)
