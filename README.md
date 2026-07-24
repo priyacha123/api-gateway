@@ -1,46 +1,63 @@
-# API Gateway + Rate Limiter
+# GateKey — API Key Management Platform
 
-A production-ready API gateway built with Node.js and Express, featuring JWT authentication, Redis-based sliding window rate limiting, and a circuit breaker pattern with automatic recovery.
+A production-ready SaaS platform for API key management with built-in rate limiting, circuit breaker protection, and real-time analytics.
 
-**Live dashboard:** https://your-dashboard.vercel.app  
-**Gateway:** https://your-gateway.railway.app
+**Live:** https://your-dashboard.vercel.app  
+**API:** https://your-railway-url.up.railway.app  
+**Docs:** https://your-dashboard.vercel.app/docs
+
+---
+
+## What is GateKey?
+
+GateKey lets developers generate and manage API keys for their services. Every key comes with configurable rate limiting, usage analytics, and automatic circuit breaker protection.
 
 ---
 
 ## Architecture
-Client
+Client (Next.js dashboard)
 ↓
-API Gateway (Express) — auth → rate limiter → circuit breaker → proxy
-↓                 ↓
-Service A         Service B
-(port 4001)      (port 4002)
+API Gateway (Express) — apiKeyAuth → rateLimiter → circuitBreaker → proxy
+↓ ↓
+Service A Service B
 ↓
-Admin Dashboard (Next.js) — reads PostgreSQL + Redis
+PostgreSQL (Prisma) + Redis (ioredis)
+↓
+Admin Dashboard (Next.js) — real-time metrics
 
 ---
 
 ## Features
 
-- JWT authentication with bcrypt password hashing
-- Per-user sliding window rate limiting via Redis sorted sets
-- Per-plan quotas (FREE: 10 req/min, PRO: 100 req/min)
-- Circuit breaker with CLOSED → OPEN → HALF-OPEN state machine
-- Distributed trace IDs on every request via X-Trace-Id header
-- Request logging to PostgreSQL with response time tracking
-- Real-time admin dashboard showing traffic, errors, circuit state, and rate limit usage
+- **API key management** — generate, rotate, revoke keys with SHA-256 hashing
+- **Per-key rate limiting** — sliding window via Redis sorted sets
+- **Circuit breaker** — CLOSED → OPEN → HALF-OPEN auto-recovery
+- **Multi-project support** — organize keys by project
+- **Plan enforcement** — FREE (2 projects, 3 keys) vs PRO (unlimited)
+- **Real-time analytics** — requests, errors, response times
+- **Onboarding flow** — 3-step setup for new users
+- **Docs page** — full API reference
+
+---
+
+## API key security
+
+Keys are never stored in plain text:
+
+1. Generate 32 random bytes → prefix with `gk_live_`
+2. Store SHA-256 hash in PostgreSQL
+3. Show raw key to user once — never again
+4. On each request: hash incoming key → compare against stored hash
 
 ---
 
 ## Rate limiting algorithm
 
-Uses a sliding window implemented with Redis sorted sets:
-
-1. Each request adds a timestamped entry via ZADD
-2. Entries older than the window are removed via ZREMRANGEBYSCORE
-3. ZCARD counts remaining entries in the window
-4. If count exceeds the plan limit → 429 with Retry-After header
-
-Unlike fixed windows, this prevents burst attacks at window boundaries.
+Sliding window using Redis sorted sets:
+- `ZADD` — add current timestamp
+- `ZREMRANGEBYSCORE` — remove entries older than window
+- `ZCARD` — count remaining entries
+- If count > limit → 429 with `Retry-After` header
 
 ---
 
@@ -48,11 +65,19 @@ Unlike fixed windows, this prevents burst attacks at window boundaries.
 
 | State | Behaviour |
 |---|---|
-| CLOSED | Normal operation, failures counted |
-| OPEN | Downstream failing, all requests rejected with 503 |
-| HALF-OPEN | Cooldown expired, one probe request allowed |
+| CLOSED | Normal — requests pass through |
+| OPEN | 5+ failures — instant 503, no downstream calls |
+| HALF-OPEN | After 10s cooldown — one probe request |
 
-Threshold: 5 failures → OPEN. Cooldown: 10 seconds → HALF-OPEN.
+---
+
+## Plans
+
+| Feature | FREE | PRO |
+|---|---|---|
+| Projects | 2 | Unlimited |
+| Keys per project | 3 | Unlimited |
+| Rate limit | 60 req/min | 1000 req/min |
 
 ---
 
@@ -69,80 +94,55 @@ PRO plan (100 req/min limit):
 - Avg latency: 8066.12 ms, Max: 15567 ms
 ![alt text](./public/pro.png)
 
+---
+
+## Tech stack
+
+**Backend:** Node.js, Express, PostgreSQL, Prisma, Redis, JWT, bcrypt  
+**Frontend:** Next.js, TypeScript, Tailwind CSS, Recharts  
+**Infrastructure:** Railway (API), Vercel (dashboard), Neon (DB), Upstash (Redis)
 
 ---
 
-## Local development
-
-### Prerequisites
-- Node.js v18+
-- Neon account (PostgreSQL)
-- Upstash account (Redis)
-
-### Setup
+## Local setup
 
 ```bash
+# Clone both repos
 git clone https://github.com/priyacha123/api-gateway
+git clone https://github.com/priyacha123/api-gateway-dashboard
+
+# Gateway setup
 cd api-gateway
 npm install
 cp .env.example .env
 # fill in DATABASE_URL, REDIS_URL, JWT_SECRET
 npx prisma migrate dev
 npm run dev
+
+# Dashboard setup
+cd dashboard
+npm install
+cp .env.example .env.local
+# fill in DATABASE_URL, REDIS_URL, NEXT_PUBLIC_GATEWAY_URL
+npm run dev
 ```
 
 ### Mock downstream services
 
-Create two simple Express servers locally:
-
-**service-a (port 4001)**
 ```bash
-mkdir service-a && cd service-a
-npm init -y && npm install express
+mkdir service-a && cd service-a && npm init -y && npm install express
+# create index.js with Express on port 4001
+node index.js
 ```
-
-```js
-const express = require('express')
-const app = express()
-let failing = false
-app.get('/data', (req, res) => failing
-  ? res.status(500).json({ error: 'down' })
-  : res.json({ service: 'A', traceId: req.headers['x-trace-id'] }))
-app.get('/break', (req, res) => { failing = true; res.json({ message: 'now failing' }) })
-app.get('/fix', (req, res) => { failing = false; res.json({ message: 'recovered' }) })
-app.listen(4001)
-```
-
-**service-b (port 4002)** 
-```bash
-mkdir service-b && cd service-b
-npm init -y && npm install express
-```
-
-```js
-const express = require('express')
-const app = express()
-let failing = false
-app.get('/data', (req, res) => failing
-  ? res.status(500).json({ error: 'down' })
-  : res.json({ service: 'B', traceId: req.headers['x-trace-id'] }))
-app.get('/break', (req, res) => { failing = true; res.json({ message: 'now failing' }) })
-app.get('/fix', (req, res) => { failing = false; res.json({ message: 'recovered' }) })
-app.listen(4002)
-```
-
-### Environment variables
-
-| Variable | Description |
-|---|---|
-| DATABASE_URL | Neon PostgreSQL connection string |
-| REDIS_URL | Upstash Redis connection string |
-| JWT_SECRET | Any long random string |
-| PORT | Gateway port (default 3000) |
 
 ---
 
-## Tech stack
+## Environment variables
 
-Node.js · Express · PostgreSQL · Prisma · Redis · ioredis · jsonwebtoken · bcrypt · http-proxy-middleware
-
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `REDIS_URL` | Upstash Redis connection string |
+| `JWT_SECRET` | Secret for signing JWT tokens |
+| `FRONTEND_URL` | Dashboard URL for CORS |
+| `NEXT_PUBLIC_GATEWAY_URL` | Gateway URL for frontend API calls |
