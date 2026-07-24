@@ -25,7 +25,7 @@ const app = express()
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://your-dashboard-domain.vercel.app'
+    'https://api-gateway-dashboard-nine.vercel.app/'
   ],
   credentials: true
 }))
