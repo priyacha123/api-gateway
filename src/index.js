@@ -18,8 +18,18 @@ const circuitBreaker = require('../middleware/circuitBreaker')
 const projectRoutes = require('./../routes/projects')
 const keyRoutes = require('./../routes/keys')
 const billingRoutes = require('./../routes/billing')
+const cors = require('cors')
 
 const app = express()
+
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://your-dashboard-domain.vercel.app'
+  ],
+  credentials: true
+}))
+
 
 app.use(express.json())
 app.use(traceMiddleware) // Use the trace middleware for all routes
