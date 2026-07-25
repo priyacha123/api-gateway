@@ -25,11 +25,15 @@ const app = express()
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://api-gateway-dashboard-nine.vercel.app/'
+    'http://localhost:3001',
+    'https://api-gateway-dashboard-nine.vercel.app'
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
 }))
 
+app.options('*', cors())
 
 app.use(express.json())
 app.use(traceMiddleware) // Use the trace middleware for all routes
