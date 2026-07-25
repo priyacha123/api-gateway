@@ -33,7 +33,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
 }))
 
-app.options('*', cors())
+// app.options(/.*/, cors());
 
 app.use(express.json())
 app.use(traceMiddleware) // Use the trace middleware for all routes
