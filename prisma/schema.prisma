@@ -9,11 +9,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 enum Plan {
-  FREE 
+  FREE
   PRO
 }
 
@@ -25,44 +25,44 @@ enum SubscriptionStatus {
 }
 
 model User {
-  id                  String              @id   @default(uuid())
-  email               String              @unique
-  passwordHash        String    
-  plan                Plan                @default(FREE)
-  stripeCustomerId    String?             @unique
-  subscriptionStatus  SubscriptionStatus  @default(INACTIVE)
-  createdAt           DateTime            @default(now())
-  projects            Project[]
-  requestLogs         RequestLog[]
+  id                     String             @id @default(uuid())
+  email                  String             @unique
+  passwordHash           String
+  plan                   Plan               @default(FREE)
+  subscriptionStatus     SubscriptionStatus @default(INACTIVE)
+  razorpaySubscriptionId String?            @unique
+  createdAt              DateTime           @default(now())
+  projects               Project[]
+  requestLogs            RequestLog[]
 }
 
 model Project {
-  id           String    @id  @default(uuid())
-  name         String 
-  description  String?
-  userId       String
-  user         User      @relation(fields: [userId],references: [id])
-  apiKeys      ApiKey[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  apiKeys     ApiKey[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model ApiKey {
-  id             String        @id  @default(uuid())  
-  name           String
-  keyHash        String        @unique
-  keyPrefix      String
-  rateLimit      Int           @default(60)
-  isActive       Boolean       @default(true) 
-  lastUsedAt     DateTime?
-  projectId      String
-  project        Project       @relation(fields: [projectId], references: [id])
-  requestLogs    RequestLog[]
-  createdAt      DateTime      @default(now())
+  id          String      @id @default(uuid())
+  name        String
+  keyHash     String      @unique
+  keyPrefix   String
+  rateLimit   Int         @default(60)
+  isActive    Boolean     @default(true)
+  lastUsedAt  DateTime?
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id])
+  requestLogs RequestLog[]
+  createdAt   DateTime    @default(now())
 }
 
 model RequestLog {
-  id           String   @id  @default(uuid())
+  id           String   @id @default(uuid())
   userId       String
   user         User     @relation(fields: [userId], references: [id])
   apiKeyId     String?
@@ -75,8 +75,8 @@ model RequestLog {
 }
 
 model WebhookEvent {
-  id               String    @id  @default(uuid())
-  stripeEventId    String    @unique
-  eventType        String
-  processedAt      DateTime  @default(now())
+  id            String   @id @default(uuid())
+  stripeEventId String   @unique
+  eventType     String
+  processedAt   DateTime @default(now())
 }
