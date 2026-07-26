@@ -14,7 +14,6 @@ router.get('/status', async (req, res, next) => {
       select: {
         plan: true,
         subscriptionStatus: true,
-        razorpaySubscriptionId: true,
         email: true,
         _count: { select: { projects: true } }
       }
@@ -32,14 +31,14 @@ router.get('/status', async (req, res, next) => {
     )
 
     const limits = {
-      FREE: { projects: 2, keysPerProject: 3, rateLimit: 60 },
+      FREE: { projects: 10, keysPerProject: 3, rateLimit: 60 },
       PRO:  { projects: 'unlimited', keysPerProject: 'unlimited', rateLimit: 1000 }
     }
 
     res.json({
       plan: user.plan,
       subscriptionStatus: user.subscriptionStatus,
-      razorpaySubscriptionId: user.razorpaySubscriptionId,
+      email: user.email,
       usage: {
         projects: user._count.projects,
         activeKeys: totalActiveKeys
@@ -51,34 +50,27 @@ router.get('/status', async (req, res, next) => {
   }
 })
 
-// POST /billing/create-subscription
-router.post('/create-subscription', async (req, res, next) => {
+// POST /billing/create-order
+router.post('/create-order', async (req, res, next) => {
   try {
     const userId = req.user.userId
-
     const user = await prisma.user.findUnique({ where: { id: userId } })
 
     if (user.plan === 'PRO') {
       return res.status(400).json({ error: 'already on PRO plan' })
     }
 
-    const subscription = await razorpay.subscriptions.create({
-      plan_id: process.env.RAZORPAY_PRO_PLAN_ID,
-      customer_notify: 1,
-      total_count: 12,
-      notes: {
-        userId: userId,
-        email: user.email
-      }
-    })
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { razorpaySubscriptionId: subscription.id }
+    const order = await razorpay.orders.create({
+      amount: 99900,
+      currency: 'INR',
+      receipt: `order_${userId.slice(0, 8)}_${Date.now()}`,
+      notes: { userId, email: user.email }
     })
 
     res.json({
-      subscriptionId: subscription.id,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
       keyId: process.env.RAZORPAY_KEY_ID
     })
   } catch (err) {
@@ -92,13 +84,13 @@ router.post('/verify-payment', async (req, res, next) => {
     const userId = req.user.userId
     const {
       razorpay_payment_id,
-      razorpay_subscription_id,
+      razorpay_order_id,
       razorpay_signature
     } = req.body
 
     const generated_signature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest('hex')
 
     if (generated_signature !== razorpay_signature) {
@@ -109,8 +101,7 @@ router.post('/verify-payment', async (req, res, next) => {
       where: { id: userId },
       data: {
         plan: 'PRO',
-        subscriptionStatus: 'ACTIVE',
-        razorpaySubscriptionId: razorpay_subscription_id
+        subscriptionStatus: 'ACTIVE'
       }
     })
 
@@ -123,40 +114,31 @@ router.post('/verify-payment', async (req, res, next) => {
   }
 })
 
-// POST /billing/cancel-subscription
-router.post('/cancel-subscription', async (req, res, next) => {
+// POST /billing/downgrade
+router.post('/downgrade', async (req, res, next) => {
   try {
     const userId = req.user.userId
-
     const user = await prisma.user.findUnique({ where: { id: userId } })
 
     if (user.plan === 'FREE') {
       return res.status(400).json({ error: 'already on FREE plan' })
     }
 
-    if (user.razorpaySubscriptionId) {
-      await razorpay.subscriptions.cancel(
-        user.razorpaySubscriptionId,
-        { cancel_at_cycle_end: 1 }
-      )
-    }
-
     await prisma.user.update({
       where: { id: userId },
       data: {
         plan: 'FREE',
-        subscriptionStatus: 'CANCELLED'
+        subscriptionStatus: 'INACTIVE'
       }
     })
 
-    res.json({
-      message: 'subscription cancelled, downgraded to FREE',
-      plan: 'FREE'
-    })
+    res.json({ message: 'downgraded to FREE', plan: 'FREE' })
   } catch (err) {
     next(err)
   }
 })
+
+module.exports = router
 
 // POST /billing/webhook — Razorpay webhook
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
