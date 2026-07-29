@@ -7,7 +7,7 @@ const PRO_PROJECT_LIMIT = Infinity
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, description } = req.body
+    const { name, description, targetUrl } = req.body
     const userId = req.user.userId
     const plan = req.user.plan
 
@@ -25,7 +25,7 @@ router.post('/', async (req, res, next) => {
     }
 
     const project = await prisma.project.create({
-      data: { name, description, userId }
+      data: { name, description, userId, targetUrl  }
     })
 
     res.status(201).json(project)
@@ -91,6 +91,19 @@ router.delete('/:id', async (req, res, next) => {
 
     await prisma.project.delete({ where: { id } })
     res.json({ message: 'project deleted' })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const { name, description, targetUrl } = req.body
+    const project = await prisma.project.update({
+      where: { id: req.params.id },
+      data: { name, description, targetUrl }
+    })
+    res.json(project)
   } catch (err) {
     next(err)
   }
